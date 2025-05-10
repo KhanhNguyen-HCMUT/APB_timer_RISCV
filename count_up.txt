@@ -1,0 +1,77 @@
+.text
+.globl main
+
+main:
+    # Ban đầu, giá trị xuất vào led = 0, tức là led sẽ tối 
+    li x2, 0x0
+
+    # Nhập a0 = 1, để 1s thì led đếm lên 1 lần
+    li a0, 0x1
+
+    mv t1, a0              # Sao chép giá trị a0 vào t1 để giữ nguyên giá trị ban đầu
+
+    # Nhân giá trị trong thanh ghi a0 với 0x9896
+    # 0x9896 = 1001 1000 1001 0110 (nhị phân)
+    # Tức là: a0 * 0x9896 = a0 * (2^15 + 2^12 + 2^11 + 2^7 + 2^4 + 2^2 + 2^1)
+        
+    slli t2, t1, 15        # t2 = t1 * 2^15
+    slli t3, t1, 12        # t3 = t1 * 2^12
+    add t4, t2, t3         # t4 = t1 * (2^15 + 2^12) 
+    slli t5, t1, 11	   # t5 = t1 * 2^11 
+    add a2, t5, t4	   # a2 = t5 + t4 = t1 * (2^15 + 2^12 + 2^11)  
+    slli a3, t1, 7	   # a3 = t1 * 2^7
+    add a4, a2, a3	   # a4 = a2 + a3 = t1 * (2^15 + 2^12 + 2^11 + 2^7)   
+    slli a5, t1, 4	   # a5 = t1 * 2^4
+    add a7, a5, a4	   # a7 = a5 + a4 = t1 * (2^15 + 2^12 + 2^11 + 2^7 + 2^4)
+    slli s2, t1, 2 	   # s2 = t1 * 2^2 
+    add s3, s2, a7	   # s3 = a7 + s2 = t1 * (2^15 + 2^12 + 2^11 + 2^7 + 2^4 + 2^2)
+    slli s4, t1, 1	   # s4 = t1 * 2^1
+    add a0, s4, s3	   # a0 = s4 + s3 = t1 * (2^15 + 2^12 + 2^11 + 2^7 + 2^4 + 2^2 + 2^1)
+
+    # Store kết quả từ thanh ghi a0 vào địa chỉ 0xc, 32 bit thấp của thanh ghi compare = a0
+    li t0, 0xc             # Đặt địa chỉ 0xc vào thanh ghi t0
+    sw a0, 0(t0)           # Store giá trị từ a0 vào địa chỉ trong t0
+    
+    # Store giá trị 0x0 vào địa chỉ 0x10,  32 bit thấp của thanh ghi compare = 0x0
+    li t0, 0x10            # Đặt địa chỉ 0x10 vào thanh ghi t0
+    li t1, 0               # Đặt giá trị 0x0 vào thanh ghi t1
+    sw t1, 0(t0)           # Store giá trị từ t1 vào địa chỉ trong t0
+    
+    # Store giá trị 0x1 vào địa chỉ 0x14, cấu hình để timer cho phép ngắt
+    li t0, 0x14            # Đặt địa chỉ 0x14 vào thanh ghi t0
+    li t1, 1               # Đặt giá trị 0x1 vào thanh ghi t1
+    sw t1, 0(t0)           # Store giá trị từ t1 vào địa chỉ trong t0
+    
+    # Store giá trị 0x1 vào địa chỉ 0x0, cấu hình để timer đếm với tốc độ = tốc độ clock/128
+    li t0, 0               # Đặt địa chỉ 0x0 vào thanh ghi t0
+    li t1, 0x703           # Đặt giá trị 0x703 vào thanh ghi t1
+    sw t1, 0(t0)           # Store giá trị từ t1 vào địa chỉ trong t0
+    
+    # Bắt đầu vòng lặp để kiểm tra giá trị tại địa chỉ 0x18
+loop:
+    li t0, 0x18            # Đặt địa chỉ 0x18 vào thanh ghi t0
+    lw t1, 0(t0)           # Load giá trị từ địa chỉ trong t0 vào t1, đọc xem cờ ngắt đã được tích cực chưa
+    
+    # Kiểm tra nếu giá trị trong t1 là 1, tức là có ngắt đang pending
+    li t2, 1               # Đặt giá trị 1 vào thanh ghi t2 để so sánh
+    beq t1, t2, exit_program # Nếu t1 == 1, nhảy đến nhãn exit_program
+    
+    # Nếu không phải là 1, tiếp tục chờ (quay lại loop)
+    j loop
+    
+exit_program:
+    #Xuất giá trị từ x2 đã được cập nhật ra led
+    addi x2, x2, 0x1	   # x2 = x2 + 1, led đếm lên (ban đầu x2 = 0, led tối)
+    li t0, 0x24            # Đặt địa chỉ 0x24 vào thanh ghi t0
+    sw x2, 0(t0)           # Store giá trị từ t1 vào địa chỉ trong t0
+    
+    #Xóa ngắt về 0 bằng cách ghi 1 vào thanh ghi tisr (địa chỉ 0x18)
+    li t0, 0x18            # Đặt địa chỉ 0x0 vào thanh ghi t0
+    li t1, 0x1             # Đặt giá trị 0x1 vào thanh ghi t1
+    sw t1, 0(t0)           # Store giá trị từ t1 vào địa chỉ trong t0 
+    
+    #Reset giá trị đếm của timer về 0, để timer đếm lại từ đầu
+    li t0, 0x4               # Đặt địa chỉ 0x4 vào thanh ghi t0
+    li t1, 0x0               # Đặt giá trị 0x0 vào thanh ghi t1
+    sw t1, 0(t0)             # Store giá trị từ t1 vào địa chỉ trong t0 
+    j loop 		     # Quay về loop để tiếp tục chờ cờ ngắt tích cực sau 1s

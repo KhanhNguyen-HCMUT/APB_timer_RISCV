@@ -1,0 +1,42 @@
+`timescale 1ns / 1ps
+
+module singlecycle_tb;
+
+    // Testbench signals
+   	wire o_insn_vld;
+    	reg i_clk, i_rst;
+    	wire [31:0] pc_debug;
+	wire [63:0] count;
+	wire interrupt;
+    	wire [31:0] hw_leds;
+	reg  [31:0] hw_switches;
+    top uut (
+        .insn_vld(o_insn_vld),
+        .clk(i_clk),
+        .rst(i_rst),
+	.pc_debug(pc_debug),
+	.count(count),
+	.interrupt(interrupt),
+	.hw_leds(hw_leds),
+	.hw_switches(hw_switches)
+    );
+
+    // Clock generation
+    always #10 i_clk = ~i_clk;
+
+    // Test sequence
+    initial begin
+        // Initialize signals
+        i_clk = 0;
+        i_rst = 0;
+	hw_switches = 32'h0;
+        // Reset sequence
+        #2 i_rst = 1;
+	hw_switches = 32'h4;       
+        #16000000;
+        // End simulation
+        $finish;
+    end
+
+
+endmodule
